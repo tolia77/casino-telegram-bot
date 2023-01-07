@@ -1,118 +1,193 @@
 from random import choice
 from time import sleep
+from math import floor
 from telebot import TeleBot, types
-from config import *
+import config
+from db import Database
+
+db_client = Database(
+    host=config.db_host,
+    database=config.db_name,
+    user=config.db_user,
+    password=config.db_password
+)
 
 
 class Player:
-    def __init__(self, user_id):
+    def __init__(self, user_id, username):
+        self.username = username
         self.user_id = user_id
-        self.balance = 500
-        self.games_played = 0
+        self._balance = 500
+        self._games_played = 0
 
     def get_info(self):
-        info = client.get_info(self.user_id)
-        self.balance = info[0]
-        self.games_played = info[1]
-
-    def update(self):
-        client.update(self.user_id, self.balance, self.games_played)
+        self._balance = db_client.get_balance(self.user_id)
+        self._games_played = db_client.get_games_played(self.user_id)
 
     def create_user(self):
-        client.create_user(self.user_id)
+        db_client.create_user(self.user_id, self.username)
+
+    def __get_balance(self):
+        return self._balance
+
+    def __set_balance(self, value):
+        self._balance = value
+        db_client.set_balance(self.user_id, value)
+
+    def __del_balance(self):
+        del self._balance
+
+    def __get_games_played(self):
+        return self._games_played
+
+    def __set_games_played(self, value):
+        self._games_played = value
+        db_client.set_games_played(self.user_id, value)
+
+    def __del_games_played(self):
+        del self._games_played
+
+    balance = property(
+        fget=__get_balance,
+        fset=__set_balance,
+        fdel=__del_balance
+    )
+
+    games_played = property(
+        fget=__get_games_played,
+        fset=__set_games_played,
+        fdel=__del_games_played
+    )
 
 
-bot = TeleBot(bot_token)
+class Bot:
+    action_markup = types.ReplyKeyboardMarkup()
+    action_markup.add("Play")
+    action_markup.add("Show statistics")
+    action_markup.add("Show best players")
 
+    def __init__(self, bot_token):
+        self.bot = TeleBot(bot_token, skip_pending=True)
+        self.player = None
+        self.start = self.bot.message_handler(commands=['start'])(self.start)
+        self.bot.polling(none_stop=True)
 
-@bot.message_handler(content_types=["text"])
-def start(message):
-    if message.from_user.id in users_list:
-        markup = types.ReplyKeyboardMarkup()
-        markup.add("Play")
-        markup.add("Show statistics")
-        player = Player(message.from_user.id)
-        player.get_info()
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Select action", reply_markup=markup), select_action, player
-        )
-    else:
-        bot.send_message(message.from_user.id, "Welcome to our casino! We give you 500 free coins, enjoy!")
-        player = Player(message.from_user.id)
-        player.create_user()
-        markup = types.ReplyKeyboardMarkup()
-        markup.add("Play")
-        markup.add("Show statistics")
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Select action", reply_markup=markup), select_action, player
-        )
-
-
-def select_action(message, player):
-    markup = types.ReplyKeyboardMarkup()
-    markup.add("Play")
-    markup.add("Show statistics")
-    if message.text == "Play":
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Place your bet"), play, player
-        )
-    elif message.text == "Show statistics":
-        bot.send_message(
-            message.from_user.id, f"Your balance is {player.balance}\nYou played {player.games_played} games")
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Select action", reply_markup=markup), select_action, player
-        )
-    else:
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Select action", reply_markup=markup), select_action, player
-        )
-
-
-def play(message, player):
-    player.get_info()
-    try:
-        markup = types.ReplyKeyboardMarkup()
-        markup.add("Play")
-        markup.add("Show statistics")
-        bet = int(message.text)
-        if bet > player.balance or bet < 1:
-            bot.send_message(message.from_user.id, "Your balance is too low")
-            bot.register_next_step_handler(
-                bot.send_message(message.from_user.id, "Place your bet"), play, player
+    def start(self, message):
+        if message.from_user.id in db_client.get_users():
+            username = message.from_user.first_name
+            if message.from_user.last_name is not None:
+                username += f" {message.from_user.last_name}"
+            self.player = Player(message.from_user.id, username)
+            self.player.get_info()
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+                self.select_action
             )
         else:
-            player.balance -= bet
-            player.games_played += 1
-            win = choice((True, False))
-            for q in range(5):
-                msg = bot.send_message(message.from_user.id, "Win")
-                sleep(0.5)
-                bot.delete_message(message.from_user.id, msg.message_id)
-                msg = bot.send_message(message.from_user.id, "Lose")
-                sleep(0.5)
-                bot.delete_message(message.from_user.id, msg.message_id)
-            if win:
-                player.balance += bet * 2
-                bot.send_message(message.from_user.id, f"Win\nYour balance is {player.balance}")
-            else:
-                bot.send_message(message.from_user.id, f"Lose\nYour balance is {player.balance}")
-            player.update()
-            if player.balance <= 0:
-                bot.send_message(message.from_user.id, "Seems like you don't have coins. Take this 10 coins.")
-                player.balance = 10
-                player.update()
-            bot.register_next_step_handler(
-                bot.send_message(message.from_user.id, "Select action", reply_markup=markup), select_action, player
+            self.bot.send_message(message.from_user.id, "Welcome to our casino! We give you 500 free coins, enjoy!")
+            username = message.from_user.first_name
+            if message.from_user.last_name is not None:
+                username += f" {message.from_user.last_name}"
+            self.player = Player(message.from_user.id, username)
+            self.player.create_user()
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+                self.select_action
             )
-    except ValueError:
-        bot.register_next_step_handler(
-            bot.send_message(message.from_user.id, "Place your bet"), play, player
+
+    def select_action(self, message):
+        if message.text == "Play":
+            markup = types.ReplyKeyboardMarkup()
+            markup.add(str(self.player.balance))
+            markup.add(str(floor(self.player.balance / 2)))
+            markup.add(str(floor(self.player.balance / 4)))
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Place your bet", reply_markup=markup), self.play
+            )
+        elif message.text == "Show statistics":
+            self.bot.send_message(
+                message.from_user.id,
+                f"Your balance is {self.player.balance}\nYou played {self.player.games_played} games"
+            )
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+                self.select_action,
+            )
+        elif message.text == "Show best players":
+            markup = types.ReplyKeyboardMarkup()
+            markup.add("by balance")
+            markup.add("by activity")
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Order by: ", reply_markup=markup),
+                self.show_best_players,
+            )
+
+        else:
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+                self.select_action,
+            )
+
+    def show_best_players(self, message):
+        mode = message.text
+        output = ""
+        if mode == "by balance":
+            info = db_client.get_best_players()
+            self.bot.send_message(message.from_user.id, "The richest players")
+            for best_player in info:
+                output += f"{best_player[0]}\nBalance: {best_player[1]}\nGames played: {best_player[2]}\n"
+            self.bot.send_message(message.from_user.id, output)
+        elif mode == "by activity":
+            self.bot.send_message(message.from_user.id, "The most active players")
+            info = db_client.get_best_players(by_activity=True)
+            for best_player in info:
+                output += f"{best_player[0]}\nBalance: {best_player[1]}\nGames played: {best_player[2]}\n"
+            self.bot.send_message(message.from_user.id, output)
+        else:
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Order by: "), self.show_best_players
+            )
+        self.bot.register_next_step_handler(
+            self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+            self.select_action
         )
 
+    def play(self, message):
+        self.player.get_info()
+        bet_placed = False
+        try:
+            bet = int(message.text)
+            bet_placed = True
+        except ValueError:
+            self.bot.register_next_step_handler(
+                self.bot.send_message(message.from_user.id, "Place your bet"), self.play
+            )
+        if bet_placed:
+            if bet > self.player.balance or bet < 1:
+                self.bot.send_message(message.from_user.id, "Your balance is too low")
+                self.bot.register_next_step_handler(
+                    self.bot.send_message(message.from_user.id, "Place your bet"), self.play
+                )
+            else:
+                self.player.balance -= bet
+                self.player.games_played += 1
+                win = choice((True, False))
+                msg = self.bot.send_message(message.from_user.id, "Win")
+                for q in range(5):
+                    sleep(0.5)
+                    self.bot.edit_message_text("Lose", message.from_user.id, msg.message_id)
+                    sleep(0.5)
+                    self.bot.edit_message_text("Win", message.from_user.id, msg.message_id)
+                if win:
+                    self.player.balance += bet * 2
+                self.bot.send_message(message.from_user.id, f"Your balance is {self.player.balance}")
+                if self.player.balance <= 0:
+                    self.bot.send_message(message.from_user.id, "Seems like you don't have coins. Take this 10 coins.")
+                    self.player.balance = 10
+                self.bot.register_next_step_handler(
+                    self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
+                    self.select_action,
+                )
 
-try:
-    bot.polling(none_stop=True)
-except Exception as ex:
-    print(ex)
-finally:
-    client.close()
+
+Bot(config.bot_token)

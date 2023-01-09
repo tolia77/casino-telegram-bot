@@ -2,7 +2,7 @@ from random import choice
 from time import sleep
 from math import floor
 from telebot import TeleBot, types
-import config
+import config1 as config
 from db import Database
 
 db_client = Database(
@@ -172,6 +172,7 @@ class Bot:
                 self.player.balance -= bet
                 self.player.games_played += 1
                 win = choice((True, False))
+                output = "Lose"
                 msg = self.bot.send_message(message.from_user.id, "Win")
                 for q in range(5):
                     sleep(0.5)
@@ -180,7 +181,8 @@ class Bot:
                     self.bot.edit_message_text("Win", message.from_user.id, msg.message_id)
                 if win:
                     self.player.balance += bet * 2
-                self.bot.send_message(message.from_user.id, f"Your balance is {self.player.balance}")
+                    output = "Win"
+                self.bot.edit_message_text(f"{output}\nYour balance is {self.player.balance}", message.from_user.id, msg.message_id)
                 if self.player.balance <= 0:
                     self.bot.send_message(message.from_user.id, "Seems like you don't have coins. Take this 10 coins.")
                     self.player.balance = 10
@@ -189,5 +191,5 @@ class Bot:
                     self.select_action,
                 )
 
-
-Bot(config.bot_token)
+if __name__ == "__main__":
+    Bot(config.bot_token)

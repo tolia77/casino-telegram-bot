@@ -1,2 +1,2 @@
 # casino_telegram_bot
-My first project with database
+This is simple casino bot. You can place bets, see statistics, see best players. My first project with a database (PostgreSQL).

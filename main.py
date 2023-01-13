@@ -2,7 +2,7 @@ from random import choice
 from time import sleep
 from math import floor
 from telebot import TeleBot, types
-import config1 as config
+import config
 from db import Database
 
 db_client = Database(

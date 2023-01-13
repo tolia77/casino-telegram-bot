@@ -73,11 +73,11 @@ class Bot:
         self.bot.polling(none_stop=True)
 
     def start(self, message):
-        if message.from_user.id in db_client.get_users():
+        if str(message.from_user.id) in db_client.get_users():
             username = message.from_user.first_name
             if message.from_user.last_name is not None:
                 username += f" {message.from_user.last_name}"
-            self.player = Player(message.from_user.id, username)
+            self.player = Player(str(message.from_user.id), username)
             self.player.get_info()
             self.bot.register_next_step_handler(
                 self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),
@@ -88,7 +88,7 @@ class Bot:
             username = message.from_user.first_name
             if message.from_user.last_name is not None:
                 username += f" {message.from_user.last_name}"
-            self.player = Player(message.from_user.id, username)
+            self.player = Player(str(message.from_user.id), username)
             self.player.create_user()
             self.bot.register_next_step_handler(
                 self.bot.send_message(message.from_user.id, "Select action", reply_markup=self.action_markup),

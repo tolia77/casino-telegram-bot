@@ -13,7 +13,7 @@ class Database:
 
     def create_user(self, user_id, username):
         self.cursor.execute(f"""
-                        insert into user_data values({user_id}, '{username}', 500, 0)
+                        insert into user_data values('{user_id}', '{username}', 500, 0)
                             """)
         self.connection.commit()
 
@@ -24,12 +24,12 @@ class Database:
         return users_list
 
     def get_balance(self, user_id):
-        self.cursor.execute(f"""select balance from user_data where id = {user_id};""")
+        self.cursor.execute(f"""select balance from user_data where id = '{user_id}';""")
         info = self.cursor.fetchall()
         return info[0][0]
 
     def get_games_played(self, user_id):
-        self.cursor.execute(f"""select games_played from user_data where id = {user_id};""")
+        self.cursor.execute(f"""select games_played from user_data where id = '{user_id}';""")
         info = self.cursor.fetchall()
         return info[0][0]
 
@@ -55,7 +55,7 @@ class Database:
         self.cursor.execute(f"""
                                 update user_data
                                 set balance = {balance}
-                                where id = {user_id};
+                                where id = '{user_id}';
                                 """)
         self.connection.commit()
 
@@ -63,7 +63,7 @@ class Database:
         self.cursor.execute(f"""
                                 update user_data
                                 set games_played = {games_played}
-                                where id = {user_id};
+                                where id = '{user_id}';
                                 """)
         self.connection.commit()
 
@@ -71,7 +71,7 @@ class Database:
         self.cursor.execute(f"""
                         update user_data
                         set balance = {balance}, games_played = {games_played}
-                        where id = {user_id};
+                        where id = '{user_id}';
                         """)
         self.connection.commit()
 
